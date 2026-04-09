@@ -2,8 +2,8 @@
 
 Bot Discord modern untuk memutar musik dengan berbagai efek dan fitur canggih. Dibuat dengan Python dan discord.py.
 
-**By: NOEKZ**
-**Remake By: HAMDAN**
+- **By: NOEKZ**
+- **Remake By: HAMDAN**
 
 ---
 
@@ -207,8 +207,8 @@ pip install --upgrade yt-dlp
 
 ## 📄 Lisensi
 
-Dibuat oleh NOEKZ
-Remake oleh HAMDAN
+- Dibuat oleh NOEKZ
+- Remake oleh HAMDAN
 
 ---
 

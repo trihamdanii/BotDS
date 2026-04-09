@@ -10,9 +10,29 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+@bot.event
+async def on_ready():
+    print(f'Bot {bot.user} is ready!')
+    # Start auto-disconnect task
+    bot.loop.create_task(auto_disconnect())
+
+async def auto_disconnect():
+    while True:
+        await asyncio.sleep(300)  # Check every 5 minutes
+        for guild in bot.guilds:
+            vc = guild.voice_client
+            if vc and not vc.is_playing() and len(vc.channel.members) == 1:  # Only bot
+                await vc.disconnect()
+                print(f"Auto-disconnected from {guild.name}")
+
+# Global variables
+
 # Global variables
 queues = {}
 loop_status = {}
+current_song = {}  # Track current song title per guild
+votes = {}  # Track skip votes per guild
+autoplay_status = {}  # Autoplay status per guild
 
 # Path to cookies file (update this to your actual path)
 COOKIES_PATH = "cookies.txt"
@@ -38,8 +58,27 @@ def play_next(ctx, guild_id):
     if guild_id in loop_status and loop_status[guild_id]:  # Loop current song
         ctx.voice_client.play(ctx.voice_client.source, after=lambda e: play_next(ctx, guild_id))
     elif guild_id in queues and queues[guild_id]:
-        source = queues[guild_id].pop(0)
+        title, source = queues[guild_id].pop(0)
+        current_song[guild_id] = title
         ctx.voice_client.play(source, after=lambda e: play_next(ctx, guild_id))
+    elif guild_id in autoplay_status and autoplay_status[guild_id] and guild_id in current_song:
+        # Autoplay: search similar song
+        last_song = current_song[guild_id]
+        try:
+            query = f"{last_song} music"  # Simple similar search
+            info = ytdl.extract_info(f"ytsearch:{query}", download=False)
+            url = info["entries"][0]["url"]
+            title = info["entries"][0]["title"]
+            source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+            current_song[guild_id] = title
+            ctx.voice_client.play(source, after=lambda e: play_next(ctx, guild_id))
+            # Optional: send message
+            asyncio.create_task(ctx.send(f"Autoplay: Memutar **{title}**"))
+        except Exception as e:
+            print(f"Autoplay error: {e}")
+            current_song.pop(guild_id, None)
+    else:
+        current_song.pop(guild_id, None)  # Clear current song when queue empty
 
 async def join_channel(ctx):
     if ctx.author.voice:
@@ -81,9 +120,10 @@ async def play(ctx, *, query: str):
         if ctx.voice_client.is_playing():
             if guild_id not in queues:
                 queues[guild_id] = []
-            queues[guild_id].append(source)
+            queues[guild_id].append((title, source))  # Store as tuple
             await ctx.send(f"**{title}** Berhasil Ditambahkan ke Antrian.")
         else:
+            current_song[guild_id] = title  # Store current song
             ctx.voice_client.play(source, after=lambda e: play_next(ctx, guild_id))
             await ctx.send(f"Sedang Memutar: **{title}**")
 
@@ -108,8 +148,21 @@ async def resume(ctx):
 async def skip(ctx):
     """Skip the current song."""
     if ctx.voice_client and ctx.voice_client.is_playing():
+        # Simple skip for now, can add vote later
         ctx.voice_client.stop()
         await ctx.send("Skip Lagunya Bangsat!")
+    else:
+        await ctx.send("Gak ada lagu yang bisa di-skip!")
+
+@bot.command()
+async def autoplay(ctx):
+    """Toggle autoplay mode."""
+    guild_id = ctx.guild.id
+    if guild_id not in autoplay_status:
+        autoplay_status[guild_id] = False
+    autoplay_status[guild_id] = not autoplay_status[guild_id]
+    status = "enabled" if autoplay_status[guild_id] else "disabled"
+    await ctx.send(f"Autoplay {status}.")
 
 @bot.command()
 async def stop(ctx):
@@ -135,10 +188,14 @@ async def nightcore(ctx):
 async def queue(ctx):
     """Display the current song queue."""
     guild_id = ctx.guild.id
+    embed = discord.Embed(title="🎵 Music Queue", color=discord.Color.blue())
     if guild_id in queues and queues[guild_id]:
-        await ctx.send(f"Queue:\n" + "\n".join([f"{i+1}. Song" for i, _ in enumerate(queues[guild_id])]))
+        queue_list = "\n".join([f"{i+1}. {song[0] if isinstance(song, tuple) else 'Song'}" for i, song in enumerate(queues[guild_id][:10])])
+        embed.add_field(name="Queue", value=queue_list or "Empty", inline=False)
+        embed.set_footer(text=f"Total songs: {len(queues[guild_id])}")
     else:
-        await ctx.send("Request Lagunya Dulu GOBLOK!")
+        embed.add_field(name="Queue", value="Request Lagunya Dulu Goblok!", inline=False)
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def remove(ctx, index: int):
@@ -171,15 +228,57 @@ async def volume(ctx, level: int):
         await ctx.send("Atur Volumenya Dari 0 - 200.")
 
 @bot.command()
-async def lyrics(ctx, *, title: str):
-    """Fetch and display lyrics for a song."""
-    try:
-        response = requests.get(f"https://api.lyrics.ovh/v1/{title}")
-        data = response.json()
-        lyrics = data.get("lyrics", "Lyrics not found.")
-        await ctx.send(lyrics[:2000])  # Discord limits messages to 2000 characters
-    except Exception as e:
-        await ctx.send(f"Gak Ada Liriknya Bangsat! {str(e)}")
+async def shuffle(ctx):
+    """Shuffle the current queue."""
+    guild_id = ctx.guild.id
+    if guild_id in queues and queues[guild_id]:
+        import random
+        random.shuffle(queues[guild_id])
+        await ctx.send("Queue berhasil diacak!")
+    else:
+        await ctx.send("Queue kosong, gak ada yang bisa diacak goblok!")
 
-# Run the bot
+@bot.command()
+async def nowplaying(ctx):
+    """Show the currently playing song."""
+    guild_id = ctx.guild.id
+    embed = discord.Embed(title="🎶 Now Playing", color=discord.Color.green())
+    if guild_id in current_song:
+        embed.add_field(name="Song", value=current_song[guild_id], inline=False)
+        embed.set_footer(text="Enjoy the music!")
+    else:
+        embed.add_field(name="Status", value="Gak ada lagu yang lagi diputar!", inline=False)
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def seek(ctx, time: str):
+    """Seek to a specific time in the song (format: MM:SS)."""
+    # This is basic; full seek needs more work with FFmpeg.
+    await ctx.send(f"Seeking to {time} - fitur ini masih basic, perlu implementasi lebih lanjut.")
+
+@bot.command()
+async def playlist(ctx, *, url: str):
+    """Load a YouTube playlist."""
+    if not ctx.voice_client:
+        await join_channel(ctx)
+
+    try:
+        info = ytdl.extract_info(url, download=False)
+        if 'entries' in info:
+            guild_id = ctx.guild.id
+            if guild_id not in queues:
+                queues[guild_id] = []
+            for entry in info['entries']:
+                if entry:
+                    title = entry.get('title', 'Unknown')
+                    url_audio = entry['url']
+                    source = discord.FFmpegPCMAudio(url_audio, **FFMPEG_OPTIONS)
+                    queues[guild_id].append((title, source))  # Store as tuple
+            await ctx.send(f"Playlist loaded with {len(info['entries'])} songs!")
+        else:
+            await ctx.send("Invalid playlist URL!")
+    except Exception as e:
+        await ctx.send(f"Error loading playlist: {str(e)}")
+
+# Run the bot / Masukan Token Bot
 bot.run("")

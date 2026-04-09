@@ -90,12 +90,16 @@ async def join_channel(ctx):
 async def join(ctx):
     """Join the voice channel."""
     await join_channel(ctx)
+    embed = discord.Embed(title="✅ Joined", description=f"Bot berhasil masuk ke **{ctx.author.voice.channel.name}**", color=discord.Color.green())
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def leave(ctx):
     """Leave the voice channel."""
     if ctx.voice_client:
         await ctx.voice_client.disconnect()
+        embed = discord.Embed(title="👋 Disconnected", description="Bot berhasil keluar dari voice channel", color=discord.Color.orange())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def play(ctx, *, query: str):
@@ -121,28 +125,34 @@ async def play(ctx, *, query: str):
             if guild_id not in queues:
                 queues[guild_id] = []
             queues[guild_id].append((title, source))  # Store as tuple
-            await ctx.send(f"**{title}** Berhasil Ditambahkan ke Antrian.")
+            embed = discord.Embed(title="📝 Ditambahkan ke Antrian", description=f"**{title}**", color=discord.Color.blue())
+            embed.set_footer(text=f"Total di antrian: {len(queues[guild_id])}")
+            await ctx.send(embed=embed)
         else:
             current_song[guild_id] = title  # Store current song
             ctx.voice_client.play(source, after=lambda e: play_next(ctx, guild_id))
-            await ctx.send(f"Sedang Memutar: **{title}**")
+            embed = discord.Embed(title="🎵 Sedang Memutar", description=f"**{title}**", color=discord.Color.green())
+            await ctx.send(embed=embed)
 
     except Exception as e:
-        await ctx.send(f"Ada Yang Error Goblok!: {str(e)}")
+        embed = discord.Embed(title="❌ Error", description=f"{str(e)}", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def pause(ctx):
     """Pause the current song."""
     if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.pause()
-        await ctx.send("Lagu di Pause.")
+        embed = discord.Embed(title="⏸️ Paused", description="Lagu berhasil di-pause", color=discord.Color.yellow())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def resume(ctx):
     """Resume the paused song."""
     if ctx.voice_client and ctx.voice_client.is_paused():
         ctx.voice_client.resume()
-        await ctx.send("Lagunya di Lanjut.")
+        embed = discord.Embed(title="▶️ Resumed", description="Lagu berhasil dilanjutkan", color=discord.Color.green())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def skip(ctx):
@@ -150,9 +160,11 @@ async def skip(ctx):
     if ctx.voice_client and ctx.voice_client.is_playing():
         # Simple skip for now, can add vote later
         ctx.voice_client.stop()
-        await ctx.send("Skip Lagunya Bangsat!")
+        embed = discord.Embed(title="⏭️ Skipped", description="Lagu berhasil di-skip", color=discord.Color.blue())
+        await ctx.send(embed=embed)
     else:
-        await ctx.send("Gak ada lagu yang bisa di-skip!")
+        embed = discord.Embed(title="❌ Error", description="Gak ada lagu yang bisa di-skip!", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def autoplay(ctx):
@@ -162,7 +174,9 @@ async def autoplay(ctx):
         autoplay_status[guild_id] = False
     autoplay_status[guild_id] = not autoplay_status[guild_id]
     status = "enabled" if autoplay_status[guild_id] else "disabled"
-    await ctx.send(f"Autoplay {status}.")
+    color = discord.Color.green() if autoplay_status[guild_id] else discord.Color.red()
+    embed = discord.Embed(title="🔄 Autoplay", description=f"Autoplay **{status}**", color=color)
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def stop(ctx):
@@ -170,19 +184,22 @@ async def stop(ctx):
     if ctx.voice_client:
         queues[ctx.guild.id] = []
         ctx.voice_client.stop()
-        await ctx.send("Berhenti dan Menghapus Antrian")
+        embed = discord.Embed(title="⏹️ Stopped", description="Playback dihentikan dan antrian dihapus", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def bassboost(ctx, intensity: int = 10):
     """Apply bassboost effect."""
     FFMPEG_OPTIONS["options"] = f"-af equalizer=f=40:width_type=o:width=2:g={intensity}"
-    await ctx.send(f"Bassboost applied with intensity: {intensity}.")
+    embed = discord.Embed(title="🔊 Bassboost", description=f"Bassboost diterapkan dengan intensitas **{intensity}**", color=discord.Color.blue())
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def nightcore(ctx):
     """Apply nightcore effect."""
     FFMPEG_OPTIONS["options"] = "-af asetrate=44100*1.25,aresample=44100"
-    await ctx.send("Nightcore effect applied.")
+    embed = discord.Embed(title="✨ Nightcore", description="Efek Nightcore berhasil diterapkan", color=discord.Color.purple())
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def queue(ctx):
@@ -194,7 +211,8 @@ async def queue(ctx):
         embed.add_field(name="Queue", value=queue_list or "Empty", inline=False)
         embed.set_footer(text=f"Total songs: {len(queues[guild_id])}")
     else:
-        embed.add_field(name="Queue", value="Request Lagunya Dulu Goblok!", inline=False)
+        embed.add_field(name="Queue", value="Request Lagunya Dulu!", inline=False)
+    embed.set_thumbnail(url="https://media.discordapp.net/attachments/1234567890/1234567890/music.png")
     await ctx.send(embed=embed)
 
 @bot.command()
@@ -203,9 +221,11 @@ async def remove(ctx, index: int):
     guild_id = ctx.guild.id
     if guild_id in queues and 0 <= index-1 < len(queues[guild_id]):
         removed = queues[guild_id].pop(index-1)
-        await ctx.send(f"Hapus Lagu {index} Dari Antrian.")
+        embed = discord.Embed(title="🗑️ Removed", description=f"Lagu **#{index}** berhasil dihapus dari antrian", color=discord.Color.orange())
+        await ctx.send(embed=embed)
     else:
-        await ctx.send("Gak Ada Lagunya GOBLOK!")
+        embed = discord.Embed(title="❌ Error", description="Gak ada lagu di antrian!", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def loop(ctx):
@@ -215,7 +235,9 @@ async def loop(ctx):
         loop_status[guild_id] = False
     loop_status[guild_id] = not loop_status[guild_id]
     status = "enabled" if loop_status[guild_id] else "disabled"
-    await ctx.send(f"Acak Lagu {status}.")
+    color = discord.Color.green() if loop_status[guild_id] else discord.Color.red()
+    embed = discord.Embed(title="🔁 Loop", description=f"Loop **{status}**", color=color)
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def volume(ctx, level: int):
@@ -223,9 +245,11 @@ async def volume(ctx, level: int):
     if ctx.voice_client and 0 <= level <= 200:
         ctx.voice_client.source = discord.PCMVolumeTransformer(ctx.voice_client.source)
         ctx.voice_client.source.volume = level / 100
-        await ctx.send(f"Atur Volume ke {level}%.")
+        embed = discord.Embed(title="🔉 Volume", description=f"Volume diatur ke **{level}%**", color=discord.Color.blue())
+        await ctx.send(embed=embed)
     else:
-        await ctx.send("Atur Volumenya Dari 0 - 200.")
+        embed = discord.Embed(title="❌ Error", description="Atur volume dari 0 - 200%", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def shuffle(ctx):
@@ -234,27 +258,29 @@ async def shuffle(ctx):
     if guild_id in queues and queues[guild_id]:
         import random
         random.shuffle(queues[guild_id])
-        await ctx.send("Queue berhasil diacak!")
+        embed = discord.Embed(title="🔀 Shuffled", description=f"Antrian berhasil diacak! ({len(queues[guild_id])} lagu)", color=discord.Color.purple())
+        await ctx.send(embed=embed)
     else:
-        await ctx.send("Queue kosong, gak ada yang bisa diacak goblok!")
+        embed = discord.Embed(title="❌ Error", description="Queue kosong!", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
 @bot.command()
 async def nowplaying(ctx):
     """Show the currently playing song."""
     guild_id = ctx.guild.id
-    embed = discord.Embed(title="🎶 Now Playing", color=discord.Color.green())
     if guild_id in current_song:
-        embed.add_field(name="Song", value=current_song[guild_id], inline=False)
-        embed.set_footer(text="Enjoy the music!")
+        embed = discord.Embed(title="🎶 Now Playing", description=current_song[guild_id], color=discord.Color.green())
+        embed.set_footer(text="Enjoy the music! 🎵")
     else:
-        embed.add_field(name="Status", value="Gak ada lagu yang lagi diputar!", inline=False)
+        embed = discord.Embed(title="🎶 Now Playing", description="Gak ada lagu yang lagi diputar!", color=discord.Color.red())
     await ctx.send(embed=embed)
 
 @bot.command()
 async def seek(ctx, time: str):
     """Seek to a specific time in the song (format: MM:SS)."""
     # This is basic; full seek needs more work with FFmpeg.
-    await ctx.send(f"Seeking to {time} - fitur ini masih basic, perlu implementasi lebih lanjut.")
+    embed = discord.Embed(title="⏩ Seek", description=f"Seeking to **{time}** - fitur masih dalam pengembangan", color=discord.Color.blue())
+    await ctx.send(embed=embed)
 
 @bot.command()
 async def playlist(ctx, *, url: str):
@@ -274,11 +300,14 @@ async def playlist(ctx, *, url: str):
                     url_audio = entry['url']
                     source = discord.FFmpegPCMAudio(url_audio, **FFMPEG_OPTIONS)
                     queues[guild_id].append((title, source))  # Store as tuple
-            await ctx.send(f"Playlist loaded with {len(info['entries'])} songs!")
+            embed = discord.Embed(title="📋 Playlist Loaded", description=f"**{len(info['entries'])}** lagu berhasil ditambahkan ke antrian", color=discord.Color.green())
+            await ctx.send(embed=embed)
         else:
-            await ctx.send("Invalid playlist URL!")
+            embed = discord.Embed(title="❌ Error", description="URL playlist tidak valid!", color=discord.Color.red())
+            await ctx.send(embed=embed)
     except Exception as e:
-        await ctx.send(f"Error loading playlist: {str(e)}")
+        embed = discord.Embed(title="❌ Error", description=f"Gagal load playlist: {str(e)}", color=discord.Color.red())
+        await ctx.send(embed=embed)
 
-# Run the bot / Masukan Token Bot
+# Run the bot token
 bot.run("")

@@ -65,9 +65,16 @@ async def play(ctx, *, query: str):
         await join_channel(ctx)
 
     try:
-        info = ytdl.extract_info(f"ytsearch:{query}", download=False)
-        url = info["entries"][0]["url"]
-        title = info["entries"][0]["title"]
+        # Check if query is a YouTube URL
+        if query.startswith("https://www.youtube.com/") or query.startswith("https://youtu.be/"):
+            info = ytdl.extract_info(query, download=False)
+            url = info["url"]
+            title = info["title"]
+        else:
+            info = ytdl.extract_info(f"ytsearch:{query}", download=False)
+            url = info["entries"][0]["url"]
+            title = info["entries"][0]["title"]
+        
         source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
 
         guild_id = ctx.guild.id
